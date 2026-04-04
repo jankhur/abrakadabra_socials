@@ -65,6 +65,7 @@ interface TextLayer extends BaseLayer {
   textBackground?: 'none' | 'solid' | 'pill';
   textBackgroundColor?: string;
   textBackgroundOpacity?: number;
+  pinned?: boolean;
 }
 
 interface LogoLayer extends BaseLayer {
@@ -82,6 +83,8 @@ type Layer = BackgroundLayer | MediaLayer | TextLayer | LogoLayer;
 interface Slide {
   id: number;
   layers: Layer[];
+  frameWidth?: number;
+  frameColor?: string;
 }
 
 interface Preset {
@@ -399,6 +402,7 @@ const PositionGrid = ({
 // Layer Panel Component
 const LayerPanel = ({
   layers,
+  globalLayers,
   selectedLayerId,
   onSelectLayer,
   onReorderLayers,
@@ -406,8 +410,10 @@ const LayerPanel = ({
   onDeleteLayer,
   onDuplicateLayer,
   onTogglePin,
+  onPinTextLayer,
 }: {
   layers: Layer[];
+  globalLayers: TextLayer[];
   selectedLayerId: string | null;
   onSelectLayer: (id: string) => void;
   onReorderLayers: (fromIndex: number, toIndex: number) => void;
@@ -415,6 +421,7 @@ const LayerPanel = ({
   onDeleteLayer: (id: string) => void;
   onDuplicateLayer: (id: string) => void;
   onTogglePin: (id: string) => void;
+  onPinTextLayer: (id: string) => void;
 }) => {
   const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
 
@@ -485,6 +492,18 @@ const LayerPanel = ({
             <Pin className={`w-4 h-4 ${isPinned ? 'fill-yellow-600' : ''}`} />
           </button>
         )}
+        {layer.type === 'text' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onPinTextLayer(layer.id);
+            }}
+            className="p-1 hover:bg-purple-100 rounded text-gray-400 hover:text-purple-600"
+            title="Pin to all slides"
+          >
+            <Pin className="w-4 h-4" />
+          </button>
+        )}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -524,6 +543,47 @@ const LayerPanel = ({
   return (
     <div className="bg-white rounded-lg shadow-lg p-4">
       <h3 className="font-bold mb-3 text-sm uppercase tracking-wide">Layers</h3>
+
+      {/* Global (Pinned) Text Layers */}
+      {globalLayers.length > 0 && (
+        <div className="mb-3">
+          <div className="flex items-center gap-1 mb-1">
+            <Pin className="w-3 h-3 text-purple-500 fill-purple-500" />
+            <span className="text-xs font-semibold text-purple-600 uppercase tracking-wide">Global (All Slides)</span>
+          </div>
+          <div className="space-y-1">
+            {globalLayers.map((gl) => (
+              <div
+                key={gl.id}
+                className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors bg-purple-50 border border-purple-200 ${
+                  selectedLayerId === gl.id ? 'border-purple-500 bg-purple-100' : 'hover:bg-purple-100'
+                }`}
+                onClick={() => onSelectLayer(gl.id)}
+              >
+                <Pin className="w-3 h-3 text-purple-500 fill-purple-500 flex-shrink-0" />
+                <Type className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                <span className="flex-1 text-sm truncate text-purple-800">{gl.name}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onPinTextLayer(gl.id); }}
+                  className="p-1 hover:bg-purple-200 rounded text-purple-500"
+                  title="Unpin from all slides"
+                >
+                  <Pin className="w-4 h-4 fill-purple-500" />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggleVisibility(gl.id); }}
+                  className="p-1 hover:bg-purple-200 rounded"
+                >
+                  {gl.visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-gray-200 mt-2 mb-2" />
+        </div>
+      )}
+
+      {/* Slide-specific Layers */}
       <div className="space-y-1">
         {sortedLayers.map((layer, index) => (
           <LayerItem key={layer.id} layer={layer} index={index} />
@@ -709,6 +769,30 @@ const TextEditor = ({
           onChange={(e) => onUpdate({ width: parseInt(e.target.value) })}
           className="w-full"
         />
+      </div>
+
+      {/* Style Presets — static, ATMOS-inspired */}
+      <div>
+        <label className="block text-xs font-medium mb-2">Style Presets</label>
+        <div className="grid grid-cols-3 gap-1.5">
+          {([
+            { label: 'Title',   icon: 'H1', style: { fontFamily: 'Plantin' as const,     fontSize: 48, fontWeight: 700 as const, fontStyle: 'normal' as const,  textAlign: 'left'           as const, lineHeight: 1.1, letterSpacing: -1,  color: '#FFFFFF', animation: 'none' as const, width: 75 } },
+            { label: 'Subtitle',icon: 'H2', style: { fontFamily: 'LL Kristall' as const, fontSize: 13, fontWeight: 400 as const, fontStyle: 'normal' as const,  textAlign: 'left'           as const, lineHeight: 1.4, letterSpacing: 4,   color: '#FFFFFF', animation: 'none' as const, width: 60 } },
+            { label: 'Quote',   icon: '"',  style: { fontFamily: 'Plantin' as const,     fontSize: 28, fontWeight: 400 as const, fontStyle: 'italic' as const,  textAlign: 'center'         as const, lineHeight: 1.5, letterSpacing: 0,   color: '#FFFFFF', animation: 'none' as const, width: 80 } },
+            { label: 'Body',    icon: 'P',  style: { fontFamily: 'Plantin' as const,     fontSize: 16, fontWeight: 400 as const, fontStyle: 'normal' as const,  textAlign: 'left'           as const, lineHeight: 1.6, letterSpacing: 0.5, color: '#FFFFFF', animation: 'none' as const, width: 70 } },
+            { label: 'Caption', icon: 'sm', style: { fontFamily: 'LL Kristall' as const, fontSize: 10, fontWeight: 400 as const, fontStyle: 'normal' as const,  textAlign: 'left'           as const, lineHeight: 1.4, letterSpacing: 2,   color: '#FFFFFF', animation: 'none' as const, width: 50 } },
+            { label: 'Display', icon: 'XL', style: { fontFamily: 'LL Kristall' as const, fontSize: 64, fontWeight: 700 as const, fontStyle: 'normal' as const,  textAlign: 'justify-spread' as const, lineHeight: 1.0, letterSpacing: 0,   color: '#FFFFFF', animation: 'none' as const, width: 90 } },
+          ]).map((p) => (
+            <button
+              key={p.label}
+              onClick={() => onUpdate(p.style)}
+              className="px-2 py-2 rounded text-xs font-medium bg-gray-100 hover:bg-gray-200 border border-gray-200 flex flex-col items-center gap-0.5 transition-colors"
+            >
+              <span className="font-bold text-sm text-gray-700">{p.icon}</span>
+              <span className="text-gray-500">{p.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Animation Presets */}
@@ -1585,12 +1669,14 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [showSafeArea, setShowSafeArea] = useState(false);
   const [showSequenceView, setShowSequenceView] = useState(false);
+  const [globalLayers, setGlobalLayers] = useState<TextLayer[]>([]);
   const slideRef = useRef<HTMLDivElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
 
   const dimensions = getDimensions(format);
   const currentSlideData = slides[currentSlide];
-  const selectedLayer = currentSlideData.layers.find(l => l.id === selectedLayerId);
+  const selectedLayer = currentSlideData.layers.find(l => l.id === selectedLayerId)
+    ?? globalLayers.find(gl => gl.id === selectedLayerId);
 
   // Adjust logo positions when format changes and ensure text layers have animation properties
   useEffect(() => {
@@ -1711,6 +1797,12 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
 
   // Toggle layer visibility
   const handleToggleVisibility = (layerId: string) => {
+    // Check if it's a global layer first
+    const isGlobal = globalLayers.some(gl => gl.id === layerId);
+    if (isGlobal) {
+      setGlobalLayers(prev => prev.map(gl => gl.id === layerId ? { ...gl, visible: !gl.visible } : gl));
+      return;
+    }
     setSlides(prev => {
       const newSlides = [...prev];
       const layerIndex = newSlides[currentSlide].layers.findIndex(l => l.id === layerId);
@@ -1845,6 +1937,88 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
     });
   };
 
+  // Slide management
+  const handleAddSlide = () => {
+    const dims = dimensions;
+    const ts = Date.now();
+    const newSlide: Slide = {
+      id: ts,
+      layers: [
+        { id: `bg-${ts}`, type: 'background', zIndex: 0, visible: true, name: 'Background', color: '#FFFFFF' } as BackgroundLayer,
+        { id: `logo-${ts}`, type: 'logo', zIndex: 10, visible: true, name: 'Logo',
+          position: { x: dims.width / 2, y: dims.height - 60 }, size: 28, pinned: true,
+          animation: 'none' as const, opacity: 1, filter: 'none' as const } as LogoLayer,
+      ],
+    };
+    setSlides(prev => {
+      const s = [...prev];
+      s.splice(currentSlide + 1, 0, newSlide);
+      return s;
+    });
+    setCurrentSlide(prev => prev + 1);
+    setSelectedLayerId(null);
+  };
+
+  const handleDuplicateSlide = () => {
+    const ts = Date.now();
+    const source = slides[currentSlide];
+    const newSlide: Slide = {
+      id: ts,
+      frameWidth: source.frameWidth,
+      frameColor: source.frameColor,
+      layers: source.layers.map(l => ({ ...l, id: `${l.id}-dup-${ts}` })),
+    };
+    setSlides(prev => {
+      const s = [...prev];
+      s.splice(currentSlide + 1, 0, newSlide);
+      return s;
+    });
+    setCurrentSlide(prev => prev + 1);
+  };
+
+  const handleDeleteSlide = (idx: number) => {
+    if (slides.length <= 1) return;
+    setSlides(prev => prev.filter((_, i) => i !== idx));
+    setCurrentSlide(prev => Math.min(prev, slides.length - 2));
+  };
+
+  // Slide frame
+  const updateSlideFrame = (updates: { frameWidth?: number; frameColor?: string }) => {
+    setSlides(prev => {
+      const s = [...prev];
+      s[currentSlide] = { ...s[currentSlide], ...updates };
+      return s;
+    });
+  };
+
+  // Pin text layer to global layers (appears on all slides)
+  const handlePinTextLayer = (layerId: string) => {
+    // Check if already global (unpin case)
+    const existingGlobal = globalLayers.find(gl => gl.id === layerId);
+    if (existingGlobal) {
+      // Unpin: remove from global, return to current slide
+      setGlobalLayers(prev => prev.filter(gl => gl.id !== layerId));
+      setSlides(sp => {
+        const ns = [...sp];
+        ns[currentSlide] = { ...ns[currentSlide], layers: [...ns[currentSlide].layers, { ...existingGlobal, pinned: false }] };
+        return ns;
+      });
+      return;
+    }
+    // Pin: must find in current slide
+    const layer = currentSlideData.layers.find(l => l.id === layerId) as TextLayer | undefined;
+    if (!layer || layer.type !== 'text') return;
+    const pinnedLayer: TextLayer = { ...layer, pinned: true };
+    // Remove from slide, add to global
+    setSlides(sp => {
+      const ns = [...sp];
+      ns[currentSlide] = { ...ns[currentSlide], layers: ns[currentSlide].layers.filter(l => l.id !== layerId) };
+      return ns;
+    });
+    setGlobalLayers(prev => [...prev, pinnedLayer]);
+    setSelectedLayerId(layerId);
+  };
+
   // Panoramic split — split current media across two slides
   const handlePanoramicSplit = () => {
     if (!selectedLayerId) return;
@@ -1918,6 +2092,12 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
 
   // Update layer
   const handleUpdateLayer = (layerId: string, updates: Partial<Layer>) => {
+    // Check global layers first
+    const isGlobal = globalLayers.some(gl => gl.id === layerId);
+    if (isGlobal) {
+      setGlobalLayers(prev => prev.map(gl => gl.id === layerId ? { ...gl, ...updates } as TextLayer : gl));
+      return;
+    }
     setSlides(prev => {
       const newSlides = [...prev];
       const layerIndex = newSlides[currentSlide].layers.findIndex(l => l.id === layerId);
@@ -2020,36 +2200,38 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
     setSelectedLayerId(newLayer.id);
   };
 
-  // File upload — fills empty placeholder if one is selected, otherwise creates new layer
+  // File upload — supports multiple files; fills empty placeholder for first file if selected
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
 
-    const selectedLayer = currentSlideData.layers.find(l => l.id === selectedLayerId);
-    if (selectedLayer?.type === 'media' && (selectedLayer as MediaLayer).url === '') {
-      // Fill the empty placeholder
-      setSlides(prev => {
-        const newSlides = [...prev];
-        const slide = { ...newSlides[currentSlide], layers: [...newSlides[currentSlide].layers] };
-        const idx = slide.layers.findIndex(l => l.id === selectedLayerId);
-        if (idx >= 0) slide.layers[idx] = { ...slide.layers[idx], url, mediaType } as MediaLayer;
-        newSlides[currentSlide] = slide;
-        return newSlides;
-      });
-    } else {
+    files.forEach((file, i) => {
+      const url = URL.createObjectURL(file);
+      const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+
+      if (i === 0) {
+        const selectedLayer = currentSlideData.layers.find(l => l.id === selectedLayerId);
+        if (selectedLayer?.type === 'media' && (selectedLayer as MediaLayer).url === '') {
+          // Fill the empty placeholder with the first file
+          setSlides(prev => {
+            const newSlides = [...prev];
+            const slide = { ...newSlides[currentSlide], layers: [...newSlides[currentSlide].layers] };
+            const idx = slide.layers.findIndex(l => l.id === selectedLayerId);
+            if (idx >= 0) slide.layers[idx] = { ...slide.layers[idx], url, mediaType } as MediaLayer;
+            newSlides[currentSlide] = slide;
+            return newSlides;
+          });
+          setMediaLibrary(prev => [...prev, { id: `media-${Date.now()}-${i}`, url, type: mediaType, name: file.name }]);
+          return;
+        }
+      }
+      // All other files: add as new layers
       handleAddMediaLayer(url, mediaType);
-    }
+      setMediaLibrary(prev => [...prev, { id: `media-${Date.now()}-${i}`, url, type: mediaType, name: file.name }]);
+    });
 
-    // Add to media library
-    const newMediaItem: MediaItem = {
-      id: `media-${Date.now()}`,
-      url,
-      type: mediaType,
-      name: file.name,
-    };
-    setMediaLibrary(prev => [...prev, newMediaItem]);
+    // Reset input so same files can be re-selected
+    e.target.value = '';
   };
 
   // Font upload
@@ -2217,7 +2399,8 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
     const pxX = e.clientX - rect.left - dragOffset.x;
     const pxY = e.clientY - rect.top - dragOffset.y;
 
-    const draggedLayer = currentSlideData.layers.find(l => l.id === isDraggingLayer);
+    const draggedLayer = currentSlideData.layers.find(l => l.id === isDraggingLayer)
+      ?? globalLayers.find(gl => gl.id === isDraggingLayer);
     if (draggedLayer && (draggedLayer.type === 'text' || draggedLayer.type === 'media')) {
       let x = (pxX / rect.width) * 100;
       let y = (pxY / rect.height) * 100;
@@ -2257,6 +2440,15 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
   };
 
   // Render all layers onto a canvas at export dimensions
+  // Merge global layers into a slide for rendering/export
+  const mergeGlobalLayers = (slideData: Slide): Slide => {
+    if (!globalLayers.length) return slideData;
+    const logoLayers = slideData.layers.filter(l => l.type === 'logo');
+    const maxLogoZ = logoLayers.length ? Math.max(...logoLayers.map(l => l.zIndex)) : 0;
+    const merged = globalLayers.map((gl, i) => ({ ...gl, zIndex: maxLogoZ - 1 - i }));
+    return { ...slideData, layers: [...slideData.layers, ...merged] };
+  };
+
   // previewDims overrides the base dimensions used for scale calculation (for ZIP multi-format export)
   const renderSlideToCanvas = async (slideData: Slide, exportDims: { width: number; height: number }, canvas: HTMLCanvasElement, previewDims?: { width: number; height: number }) => {
     const ctx = canvas.getContext('2d');
@@ -2500,6 +2692,16 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
         });
       }
     }
+
+    // Draw slide frame (drawn last, on top of everything)
+    const fw = (slideData.frameWidth ?? 0) * scale;
+    if (fw > 0) {
+      ctx.fillStyle = slideData.frameColor ?? '#ffffff';
+      ctx.fillRect(0, 0, exportDims.width, fw);
+      ctx.fillRect(0, exportDims.height - fw, exportDims.width, fw);
+      ctx.fillRect(0, 0, fw, exportDims.height);
+      ctx.fillRect(exportDims.width - fw, 0, fw, exportDims.height);
+    }
   };
 
   // Video export using MediaRecorder
@@ -2513,7 +2715,7 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
       canvas.height = exportDims.height;
 
       // Render all layers onto the canvas
-      await renderSlideToCanvas(currentSlideData, exportDims, canvas);
+      await renderSlideToCanvas(mergeGlobalLayers(currentSlideData), exportDims, canvas);
 
       // Capture stream from canvas
       const stream = canvas.captureStream(30); // 30 FPS
@@ -2596,7 +2798,7 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
         canvas.width = exportDims.width;
         canvas.height = exportDims.height;
 
-        await renderSlideToCanvas(adjustedSlide, exportDims, canvas, fmtDims);
+        await renderSlideToCanvas(mergeGlobalLayers(adjustedSlide), exportDims, canvas, fmtDims);
 
         const blob = await new Promise<Blob>((resolve) => {
           canvas.toBlob((b) => resolve(b!), 'image/png');
@@ -2945,6 +3147,7 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
         <div className="w-64 flex-shrink-0 space-y-4">
           <LayerPanel
             layers={currentSlideData.layers}
+            globalLayers={globalLayers}
             selectedLayerId={selectedLayerId}
             onSelectLayer={setSelectedLayerId}
             onReorderLayers={handleReorderLayers}
@@ -2952,6 +3155,7 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
             onDeleteLayer={handleDeleteLayer}
             onDuplicateLayer={handleDuplicateLayer}
             onTogglePin={handleTogglePin}
+            onPinTextLayer={handlePinTextLayer}
           />
           
           {/* Add Layer Buttons */}
@@ -2971,6 +3175,7 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
                 <input
                   type="file"
                   accept="image/*,video/*"
+                  multiple
                   onChange={handleFileUpload}
                   className="hidden"
                 />
@@ -3060,6 +3265,39 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
               ))}
             </div>
           </div>
+
+          {/* Slide Frame */}
+          <div className="bg-white rounded-lg shadow-lg p-4">
+            <h3 className="font-bold mb-3 text-sm uppercase tracking-wide">Slide Frame</h3>
+            <label className="block text-xs font-medium mb-1">Frame: {currentSlideData.frameWidth ?? 0}px</label>
+            <input
+              type="range" min="0" max="80"
+              value={currentSlideData.frameWidth ?? 0}
+              onChange={(e) => updateSlideFrame({ frameWidth: parseInt(e.target.value) })}
+              className="w-full"
+            />
+            {(currentSlideData.frameWidth ?? 0) > 0 && (
+              <div className="mt-2">
+                <label className="block text-xs font-medium mb-1">Frame Color</label>
+                <div className="flex gap-1 flex-wrap">
+                  {(['#ffffff', '#000000', '#cccccc', '#1A1A1A', '#D4AF37', '#FF4500'] as const).map((hex) => (
+                    <button
+                      key={hex}
+                      onClick={() => updateSlideFrame({ frameColor: hex })}
+                      className={`w-7 h-7 rounded border-2 transition-transform ${(currentSlideData.frameColor ?? '#ffffff') === hex ? 'border-blue-500 scale-110' : 'border-gray-300'}`}
+                      style={{ background: hex }}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    value={currentSlideData.frameColor ?? '#ffffff'}
+                    onChange={(e) => updateSlideFrame({ frameColor: e.target.value })}
+                    className="w-7 h-7 rounded border border-gray-300 cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Center - Canvas */}
@@ -3082,6 +3320,29 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
               className="p-2 rounded hover:bg-gray-100 disabled:opacity-50"
             >
               <ChevronRight className="w-5 h-5" />
+            </button>
+            <div className="w-px h-6 bg-gray-300 mx-2" />
+            <button
+              onClick={handleAddSlide}
+              className="p-2 rounded hover:bg-green-100 text-green-700"
+              title="Add new slide"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleDuplicateSlide}
+              className="p-2 rounded hover:bg-blue-100 text-blue-700"
+              title="Duplicate current slide"
+            >
+              <Copy className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => handleDeleteSlide(currentSlide)}
+              disabled={slides.length <= 1}
+              className="p-2 rounded hover:bg-red-100 text-red-500 disabled:opacity-30"
+              title="Delete current slide"
+            >
+              <Trash2 className="w-5 h-5" />
             </button>
             <div className="w-px h-6 bg-gray-300 mx-2" />
             <button
@@ -3152,7 +3413,7 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
           >
-            {currentSlideData.layers
+            {mergeGlobalLayers(currentSlideData).layers
               .sort((a, b) => a.zIndex - b.zIndex)
               .map(renderLayer)}
 
@@ -3186,6 +3447,16 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
                   <span className="text-[9px] text-red-500 mt-0.5">IG UI zone</span>
                 </div>
               </>
+            )}
+            {/* Slide Frame overlay */}
+            {(currentSlideData.frameWidth ?? 0) > 0 && (
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  boxShadow: `inset 0 0 0 ${currentSlideData.frameWidth}px ${currentSlideData.frameColor ?? '#ffffff'}`,
+                  zIndex: 9999,
+                }}
+              />
             )}
           </div>
 
@@ -3243,6 +3514,15 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
                 </button>
               );
             })}
+            {/* Add new slide button */}
+            <button
+              onClick={handleAddSlide}
+              className="flex-shrink-0 border-2 border-dashed border-gray-300 rounded hover:border-green-500 hover:bg-green-50 flex items-center justify-center text-gray-400 hover:text-green-600 transition-colors"
+              style={{ width: dimensions.width * (showSequenceView ? 0.12 : 0.15), height: dimensions.height * (showSequenceView ? 0.12 : 0.15) }}
+              title="Add new slide"
+            >
+              <Plus size={16} />
+            </button>
           </div>
         </div>
 

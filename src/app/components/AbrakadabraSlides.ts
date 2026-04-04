@@ -42,6 +42,7 @@ export type TextLayer = {
   textBackground?: 'none' | 'solid' | 'pill';
   textBackgroundColor?: string;
   textBackgroundOpacity?: number;
+  pinned?: boolean;
 };
 
 export type LogoLayer = {
@@ -80,6 +81,8 @@ export type Layer = BackgroundLayer | MediaLayer | TextLayer | LogoLayer;
 export interface Slide {
   id: number;
   layers: Layer[];
+  frameWidth?: number;
+  frameColor?: string;
 }
 
 export const createAbrakadabraSlides = (
