@@ -45,6 +45,16 @@ interface MediaLayer extends BaseLayer {
   crop?: 'full' | 'left-half' | 'right-half' | 'top-half' | 'bottom-half';
   borderWidth?: number;
   borderColor?: string;
+  // Transform & style properties
+  rotation?: number;
+  cornerRadius?: number;
+  flipH?: boolean;
+  flipV?: boolean;
+  shadow?: boolean;
+  shadowColor?: string;
+  shadowBlur?: number;
+  opacity?: number;        // 0-100
+  objectFit?: 'cover' | 'contain';
 }
 
 interface TextLayer extends BaseLayer {
@@ -106,8 +116,10 @@ interface CustomFont {
   family: string;
 }
 
+type FormatKey = 'story' | 'post' | 'post-portrait' | 'post-landscape' | 'linkedin';
+
 interface EditorProps {
-  format: 'story' | 'post' | 'post-portrait' | 'post-landscape' | 'linkedin';
+  initialFormat?: FormatKey;
 }
 
 // Format dimensions
@@ -933,129 +945,178 @@ const MediaEditor = ({
   layer: MediaLayer;
   onUpdate: (updates: Partial<MediaLayer>) => void;
 }) => {
+  const sectionClass = "border-t border-gray-100 pt-3";
+  const labelClass = "block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5";
+  const btnBase = "px-2 py-1.5 rounded text-xs font-medium transition-colors";
+  const btnActive = "bg-gray-900 text-white";
+  const btnInactive = "bg-gray-100 hover:bg-gray-200 text-gray-700";
+
   return (
     <div className="bg-white rounded-lg shadow-lg p-4 space-y-3 max-h-[calc(100vh-6rem)] overflow-y-auto">
-      <h3 className="font-bold mb-3 text-sm uppercase tracking-wide">Media Properties</h3>
+      <h3 className="font-bold text-sm uppercase tracking-wide text-gray-800">Media Properties</h3>
 
-      {/* Quick Position */}
-      <PositionGrid
-        onPosition={(pos) => onUpdate({ position: pos })}
-        mode="percent-centered"
-      />
-
-      {/* Scale */}
+      {/* ── POSITION ── */}
       <div>
-        <label className="block text-xs font-medium mb-1">Scale: {layer.scale}%</label>
-        <input
-          type="range"
-          min="50"
-          max="300"
-          value={layer.scale}
-          onChange={(e) => onUpdate({ scale: parseInt(e.target.value) })}
-          className="w-full"
+        <label className={labelClass}>Position</label>
+        {/* Quick-position grid — clamped to keep image inside canvas */}
+        <PositionGrid
+          onPosition={(pos) => {
+            const half = layer.scale / 2;
+            onUpdate({ position: {
+              x: Math.max(half + 2, Math.min(100 - half - 2, pos.x)),
+              y: Math.max(half + 2, Math.min(100 - half - 2, pos.y)),
+            }});
+          }}
+          mode="percent-centered"
         />
+        {/* Fine X / Y sliders */}
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          <div>
+            <div className="flex justify-between text-xs text-gray-500 mb-0.5"><span>X</span><span>{Math.round(layer.position.x)}%</span></div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => onUpdate({ position: { ...layer.position, x: Math.max(0, layer.position.x - 1) } })} className="w-5 h-5 rounded bg-gray-200 hover:bg-gray-300 text-xs flex items-center justify-center font-bold">‹</button>
+              <input type="range" min="0" max="100" step="0.5" value={layer.position.x} onChange={(e) => onUpdate({ position: { ...layer.position, x: parseFloat(e.target.value) } })} className="flex-1" />
+              <button onClick={() => onUpdate({ position: { ...layer.position, x: Math.min(100, layer.position.x + 1) } })} className="w-5 h-5 rounded bg-gray-200 hover:bg-gray-300 text-xs flex items-center justify-center font-bold">›</button>
+            </div>
+          </div>
+          <div>
+            <div className="flex justify-between text-xs text-gray-500 mb-0.5"><span>Y</span><span>{Math.round(layer.position.y)}%</span></div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => onUpdate({ position: { ...layer.position, y: Math.max(0, layer.position.y - 1) } })} className="w-5 h-5 rounded bg-gray-200 hover:bg-gray-300 text-xs flex items-center justify-center font-bold">‹</button>
+              <input type="range" min="0" max="100" step="0.5" value={layer.position.y} onChange={(e) => onUpdate({ position: { ...layer.position, y: parseFloat(e.target.value) } })} className="flex-1" />
+              <button onClick={() => onUpdate({ position: { ...layer.position, y: Math.min(100, layer.position.y + 1) } })} className="w-5 h-5 rounded bg-gray-200 hover:bg-gray-300 text-xs flex items-center justify-center font-bold">›</button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Filter */}
-      <div>
-        <label className="block text-xs font-medium mb-2">Filter</label>
-        <div className="grid grid-cols-3 gap-1">
-          {([
-            { value: 'none', label: 'None' },
-            { value: 'blur', label: 'Blur' },
-            { value: 'grayscale', label: 'B&W' },
-            { value: 'sepia', label: 'Sepia' },
-            { value: 'brightness', label: 'Bright' },
-          ] as const).map((f) => (
-            <button
-              key={f.value}
-              onClick={() => onUpdate({ filter: f.value })}
-              className={`px-2 py-1.5 rounded text-xs font-medium transition-colors ${
-                (layer.filter ?? 'none') === f.value ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
-              }`}
-            >
-              {f.label}
+      {/* ── SIZE ── */}
+      <div className={sectionClass}>
+        <label className={labelClass}>Size</label>
+        <div className="flex justify-between text-xs text-gray-500 mb-0.5"><span>Scale</span><span>{layer.scale}%</span></div>
+        <input type="range" min="10" max="300" value={layer.scale} onChange={(e) => onUpdate({ scale: parseInt(e.target.value) })} className="w-full" />
+        <div className="flex gap-1 mt-1.5">
+          {[50, 75, 100].map(v => (
+            <button key={v} onClick={() => onUpdate({ scale: v })} className={`flex-1 py-1 rounded text-xs font-medium ${layer.scale === v ? btnActive : btnInactive}`}>{v}%</button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── OPACITY ── */}
+      <div className={sectionClass}>
+        <div className="flex justify-between items-center mb-1">
+          <label className={labelClass} style={{marginBottom:0}}>Opacity</label>
+          <span className="text-xs text-gray-500">{layer.opacity ?? 100}%</span>
+        </div>
+        <input type="range" min="10" max="100" value={layer.opacity ?? 100} onChange={(e) => onUpdate({ opacity: parseInt(e.target.value) })} className="w-full" />
+      </div>
+
+      {/* ── TRANSFORM ── */}
+      <div className={sectionClass}>
+        <label className={labelClass}>Transform</label>
+        {/* Rotation */}
+        <div className="mb-2">
+          <div className="flex justify-between text-xs text-gray-500 mb-0.5">
+            <span>Rotation</span>
+            <div className="flex items-center gap-2">
+              <span>{layer.rotation ?? 0}°</span>
+              {(layer.rotation ?? 0) !== 0 && <button onClick={() => onUpdate({ rotation: 0 })} className="text-blue-500 hover:underline text-xs">Reset</button>}
+            </div>
+          </div>
+          <input type="range" min="-180" max="180" value={layer.rotation ?? 0} onChange={(e) => onUpdate({ rotation: parseInt(e.target.value) })} className="w-full" />
+        </div>
+        {/* Flip & Fit */}
+        <div className="grid grid-cols-4 gap-1">
+          <button onClick={() => onUpdate({ flipH: !layer.flipH })} className={`${btnBase} ${layer.flipH ? btnActive : btnInactive}`} title="Flip Horizontal">↔ H</button>
+          <button onClick={() => onUpdate({ flipV: !layer.flipV })} className={`${btnBase} ${layer.flipV ? btnActive : btnInactive}`} title="Flip Vertical">↕ V</button>
+          <button onClick={() => onUpdate({ objectFit: 'cover' })} className={`${btnBase} ${(layer.objectFit ?? 'cover') === 'cover' ? 'bg-blue-500 text-white' : btnInactive}`} title="Fill frame (may crop)">Fill</button>
+          <button onClick={() => onUpdate({ objectFit: 'contain' })} className={`${btnBase} ${layer.objectFit === 'contain' ? 'bg-blue-500 text-white' : btnInactive}`} title="Fit inside (letterbox)">Fit</button>
+        </div>
+      </div>
+
+      {/* ── CORNER RADIUS ── */}
+      <div className={sectionClass}>
+        <div className="flex justify-between items-center mb-1">
+          <label className={labelClass} style={{marginBottom:0}}>Corner Radius</label>
+          <span className="text-xs text-gray-500">{layer.cornerRadius ?? 0}px</span>
+        </div>
+        <input type="range" min="0" max="200" value={layer.cornerRadius ?? 0} onChange={(e) => onUpdate({ cornerRadius: parseInt(e.target.value) })} className="w-full" />
+        <div className="flex gap-1 mt-1.5">
+          {[0, 8, 24, 999].map((v, i) => (
+            <button key={v} onClick={() => onUpdate({ cornerRadius: v })} className={`flex-1 py-1 rounded text-xs font-medium ${(layer.cornerRadius ?? 0) === v ? btnActive : btnInactive}`}>
+              {['None', 'S', 'M', '●'][i]}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Overlay */}
-      <div>
-        <label className="block text-xs font-medium mb-2">Overlay</label>
-        <div className="grid grid-cols-2 gap-1">
-          {([
-            { value: 'none', label: 'None' },
-            { value: 'dark', label: 'Dark' },
-            { value: 'light', label: 'Light' },
-            { value: 'gradient', label: 'Gradient' },
-          ] as const).map((o) => (
-            <button
-              key={o.value}
-              onClick={() => onUpdate({ overlay: o.value })}
-              className={`px-2 py-1.5 rounded text-xs font-medium transition-colors ${
-                (layer.overlay ?? 'none') === o.value ? 'bg-purple-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
-              }`}
-            >
-              {o.label}
-            </button>
+      {/* ── SHADOW ── */}
+      <div className={sectionClass}>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className={labelClass} style={{marginBottom:0}}>Drop Shadow</label>
+          <button onClick={() => onUpdate({ shadow: !layer.shadow })} className={`px-3 py-0.5 rounded-full text-xs font-medium transition-colors ${layer.shadow ? 'bg-gray-900 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}>{layer.shadow ? 'On' : 'Off'}</button>
+        </div>
+        {layer.shadow && (
+          <div className="space-y-2 pl-1">
+            <div>
+              <div className="flex justify-between text-xs text-gray-500 mb-0.5"><span>Blur</span><span>{layer.shadowBlur ?? 20}px</span></div>
+              <input type="range" min="0" max="80" value={layer.shadowBlur ?? 20} onChange={(e) => onUpdate({ shadowBlur: parseInt(e.target.value) })} className="w-full" />
+            </div>
+            <div className="flex gap-1 flex-wrap">
+              {['#000000','#1a1a1a','#ffffff','#3B82F6','#8B5CF6','#EF4444','#F59E0B'].map(hex => (
+                <button key={hex} onClick={() => onUpdate({ shadowColor: hex })} className={`w-6 h-6 rounded border-2 transition-transform hover:scale-110 ${(layer.shadowColor ?? '#000000') === hex ? 'border-blue-500 scale-110' : 'border-gray-300'}`} style={{ background: hex }} />
+              ))}
+              <input type="color" value={layer.shadowColor ?? '#000000'} onChange={(e) => onUpdate({ shadowColor: e.target.value })} className="w-6 h-6 rounded border border-gray-300 cursor-pointer" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── FILTER ── */}
+      <div className={sectionClass}>
+        <label className={labelClass}>Filter</label>
+        <div className="grid grid-cols-5 gap-1">
+          {([{ value: 'none', label: 'None' }, { value: 'blur', label: 'Blur' }, { value: 'grayscale', label: 'B&W' }, { value: 'sepia', label: 'Sepia' }, { value: 'brightness', label: 'Bright' }] as const).map((f) => (
+            <button key={f.value} onClick={() => onUpdate({ filter: f.value })} className={`py-1.5 rounded text-xs font-medium transition-colors ${(layer.filter ?? 'none') === f.value ? 'bg-blue-500 text-white' : btnInactive}`}>{f.label}</button>
           ))}
         </div>
       </div>
 
-      {/* Crop */}
-      <div>
-        <label className="block text-xs font-medium mb-2">Crop</label>
-        <div className="grid grid-cols-3 gap-1">
-          {([
-            { value: 'full', label: 'Full' },
-            { value: 'left-half', label: 'Left ½' },
-            { value: 'right-half', label: 'Right ½' },
-          ] as const).map((c) => (
-            <button
-              key={c.value}
-              onClick={() => onUpdate({ crop: c.value })}
-              className={`px-2 py-1.5 rounded text-xs font-medium transition-colors ${
-                (layer.crop ?? 'full') === c.value ? 'bg-green-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
-              }`}
-            >
-              {c.label}
-            </button>
+      {/* ── OVERLAY ── */}
+      <div className={sectionClass}>
+        <label className={labelClass}>Overlay</label>
+        <div className="grid grid-cols-4 gap-1">
+          {([{ value: 'none', label: 'None' }, { value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }, { value: 'gradient', label: '↓ Grad' }] as const).map((o) => (
+            <button key={o.value} onClick={() => onUpdate({ overlay: o.value })} className={`py-1.5 rounded text-xs font-medium transition-colors ${(layer.overlay ?? 'none') === o.value ? 'bg-purple-500 text-white' : btnInactive}`}>{o.label}</button>
           ))}
         </div>
       </div>
 
-      {/* Border */}
-      <div>
-        <label className="block text-xs font-medium mb-1">Border: {layer.borderWidth ?? 0}px</label>
-        <input
-          type="range"
-          min="0"
-          max="40"
-          value={layer.borderWidth ?? 0}
-          onChange={(e) => onUpdate({ borderWidth: parseInt(e.target.value) })}
-          className="w-full"
-        />
+      {/* ── CROP ── */}
+      <div className={sectionClass}>
+        <label className={labelClass}>Crop</label>
+        <div className="grid grid-cols-5 gap-1">
+          {([{ value: 'full', label: 'Full' }, { value: 'left-half', label: 'L ½' }, { value: 'right-half', label: 'R ½' }, { value: 'top-half', label: 'T ½' }, { value: 'bottom-half', label: 'B ½' }] as const).map((c) => (
+            <button key={c.value} onClick={() => onUpdate({ crop: c.value })} className={`py-1.5 rounded text-xs font-medium transition-colors ${(layer.crop ?? 'full') === c.value ? 'bg-green-500 text-white' : btnInactive}`}>{c.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── BORDER ── */}
+      <div className={sectionClass}>
+        <div className="flex justify-between items-center mb-1">
+          <label className={labelClass} style={{marginBottom:0}}>Border</label>
+          <span className="text-xs text-gray-500">{layer.borderWidth ?? 0}px</span>
+        </div>
+        <input type="range" min="0" max="40" value={layer.borderWidth ?? 0} onChange={(e) => onUpdate({ borderWidth: parseInt(e.target.value) })} className="w-full" />
         {(layer.borderWidth ?? 0) > 0 && (
           <div className="mt-2">
-            <label className="block text-xs font-medium mb-1">Border Color</label>
+            <label className="block text-xs text-gray-500 mb-1">Border Color</label>
             <div className="flex gap-1 flex-wrap">
               {(['#ffffff', '#000000', '#cccccc', '#1A1A1A', '#D4AF37', '#FF4500'] as const).map((hex) => (
-                <button
-                  key={hex}
-                  onClick={() => onUpdate({ borderColor: hex })}
-                  className={`w-7 h-7 rounded border-2 transition-transform ${
-                    (layer.borderColor ?? '#ffffff') === hex ? 'border-blue-500 scale-110' : 'border-gray-300'
-                  }`}
-                  style={{ background: hex }}
-                />
+                <button key={hex} onClick={() => onUpdate({ borderColor: hex })} className={`w-7 h-7 rounded border-2 transition-transform hover:scale-110 ${(layer.borderColor ?? '#ffffff') === hex ? 'border-blue-500 scale-110' : 'border-gray-300'}`} style={{ background: hex }} />
               ))}
-              <input
-                type="color"
-                value={layer.borderColor ?? '#ffffff'}
-                onChange={(e) => onUpdate({ borderColor: e.target.value })}
-                className="w-7 h-7 rounded border border-gray-300 cursor-pointer"
-              />
+              <input type="color" value={layer.borderColor ?? '#ffffff'} onChange={(e) => onUpdate({ borderColor: e.target.value })} className="w-7 h-7 rounded border border-gray-300 cursor-pointer" />
             </div>
           </div>
         )}
@@ -1422,172 +1483,134 @@ const PresetDialog = ({
 };
 
 // Export Dialog Component
+const ALL_EXPORT_FORMATS: { key: FormatKey; label: string; dims: string; ratio: string }[] = [
+  { key: 'story',          label: 'Story',          dims: '1080×1920',  ratio: '9:16'   },
+  { key: 'post',           label: 'Post Square',    dims: '1080×1080',  ratio: '1:1'    },
+  { key: 'post-portrait',  label: 'Post Portrait',  dims: '1080×1350',  ratio: '4:5'    },
+  { key: 'post-landscape', label: 'Post Landscape', dims: '1080×566',   ratio: '1.91:1' },
+  { key: 'linkedin',       label: 'LinkedIn',       dims: '1080×1080',  ratio: '1:1'    },
+];
+
 const ExportDialog = ({
   format,
   exportFormat,
   exportQuality,
   videoDuration,
+  selectedFormats,
   onFormatChange,
   onQualityChange,
   onDurationChange,
+  onSelectedFormatsChange,
   onExport,
+  onZipExport,
   onClose,
 }: {
   format: string;
   exportFormat: 'jpeg' | 'png' | 'mp4';
   exportQuality: number;
   videoDuration: number;
+  selectedFormats: FormatKey[];
   onFormatChange: (format: 'jpeg' | 'png' | 'mp4') => void;
   onQualityChange: (quality: number) => void;
   onDurationChange: (duration: number) => void;
+  onSelectedFormatsChange: (formats: FormatKey[]) => void;
   onExport: () => void;
   onZipExport: () => void;
   onClose: () => void;
 }) => {
-  const exportDims = getExportDimensions(format);
-  
-  const formatDetails = {
-    story: { name: 'Instagram Story', size: '1080×1920px', ratio: '9:16' },
-    post: { name: 'Instagram Post (Square)', size: '1080×1080px', ratio: '1:1' },
-    'post-portrait': { name: 'Instagram Post (Portrait)', size: '1080×1350px', ratio: '4:5' },
-    'post-landscape': { name: 'Instagram Post (Landscape)', size: '1200×628px', ratio: '1.91:1' },
-    linkedin: { name: 'LinkedIn Post', size: '1200×1200px', ratio: '1:1' },
+  const toggleFormat = (key: FormatKey) => {
+    onSelectedFormatsChange(
+      selectedFormats.includes(key)
+        ? selectedFormats.filter(f => f !== key)
+        : [...selectedFormats, key]
+    );
   };
-  
-  const details = formatDetails[format as keyof typeof formatDetails];
-  
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-white rounded-lg shadow-2xl p-6 w-96 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold text-lg uppercase tracking-wide">Export Settings</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        {/* Format Info */}
-        <div className="mb-6 p-4 bg-purple-50 rounded-lg">
-          <h3 className="font-medium text-sm mb-2 text-purple-900">{details.name}</h3>
-          <div className="text-xs text-purple-700 space-y-1">
-            <p><strong>Dimensions:</strong> {details.size}</p>
-            <p><strong>Aspect Ratio:</strong> {details.ratio}</p>
-          </div>
-        </div>
-        
-        {/* File Format */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">File Format</label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => onFormatChange('jpeg')}
-              className={`flex-1 px-4 py-2 rounded text-sm font-medium transition-colors ${
-                exportFormat === 'jpeg'
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-gray-200 hover:bg-gray-300'
-              }`}
-            >
-              JPEG
-            </button>
-            <button
-              onClick={() => onFormatChange('png')}
-              className={`flex-1 px-4 py-2 rounded text-sm font-medium transition-colors ${
-                exportFormat === 'png'
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-gray-200 hover:bg-gray-300'
-              }`}
-            >
-              PNG
-            </button>
-            <button
-              onClick={() => onFormatChange('mp4')}
-              className={`flex-1 px-4 py-2 rounded text-sm font-medium transition-colors ${
-                exportFormat === 'mp4'
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-gray-200 hover:bg-gray-300'
-              }`}
-            >
-              MP4
-            </button>
-          </div>
-          <p className="text-xs text-gray-500 mt-1">
-            {exportFormat === 'jpeg' ? 'Smaller file size, good for photos' : exportFormat === 'png' ? 'Lossless quality, supports transparency' : 'Animated video (WebM format)'}
-          </p>
-        </div>
-        
-        {/* Quality Slider (only for JPEG) */}
-        {exportFormat === 'jpeg' && (
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">Quality: {exportQuality}%</label>
-            <input
-              type="range"
-              min="60"
-              max="100"
-              value={exportQuality}
-              onChange={(e) => onQualityChange(parseInt(e.target.value))}
-              className="w-full"
-            />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>Smaller file</span>
-              <span>Best quality</span>
-            </div>
-          </div>
-        )}
-        
-        {/* Video Duration */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium mb-2">Video Duration: {videoDuration}s</label>
-          <input
-            type="range"
-            min="1"
-            max="10"
-            value={videoDuration}
-            onChange={(e) => onDurationChange(parseInt(e.target.value))}
-            className="w-full"
-          />
-          <div className="flex justify-between text-xs text-gray-500 mt-1">
-            <span>1 second</span>
-            <span>10 seconds</span>
-          </div>
-          <p className="text-xs text-gray-500 mt-2">
-            Duration for video/animation export (static slides will use 1 frame)
-          </p>
-        </div>
-        
-        {/* ZIP Export */}
-        <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <p className="text-xs text-blue-800 mb-2">
-            <strong>Batch Export:</strong> Export all slides in Story (1080x1920), Post (1080x1080), and Landscape (1200x628) into a single ZIP with three folders.
-          </p>
-          <button
-            onClick={() => {
-              onZipExport();
-              onClose();
-            }}
-            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium text-sm flex items-center justify-center gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Export ZIP (story / post / landscape)
-          </button>
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-[420px] max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="font-bold text-lg uppercase tracking-wide">Export</h2>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
         </div>
 
-        {/* Export Buttons */}
-        <div className="flex gap-2">
+        {/* ── EXPORT FORMATS ── */}
+        <div className="mb-5">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-semibold text-gray-700">Target Formats</label>
+            <div className="flex gap-2 text-xs">
+              <button onClick={() => onSelectedFormatsChange(ALL_EXPORT_FORMATS.map(f => f.key))} className="text-blue-500 hover:underline">All</button>
+              <span className="text-gray-300">|</span>
+              <button onClick={() => onSelectedFormatsChange([])} className="text-gray-400 hover:underline">None</button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            {ALL_EXPORT_FORMATS.map(({ key, label, dims, ratio }) => {
+              const checked = selectedFormats.includes(key);
+              const isCurrent = key === format;
+              return (
+                <label key={key} className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors ${checked ? 'bg-purple-50 border border-purple-200' : 'bg-gray-50 border border-gray-100 hover:bg-gray-100'}`}>
+                  <input type="checkbox" checked={checked} onChange={() => toggleFormat(key)} className="w-4 h-4 accent-purple-600 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-800">{label}</span>
+                      {isCurrent && <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded-full font-medium">current</span>}
+                    </div>
+                    <div className="text-xs text-gray-400">{dims}px · {ratio}</div>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+          {selectedFormats.length === 0 && <p className="text-xs text-red-400 mt-1.5">Select at least one format to export.</p>}
+        </div>
+
+        {/* ── FILE TYPE ── */}
+        <div className="mb-5">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">File Type</label>
+          <div className="grid grid-cols-3 gap-2">
+            {(['jpeg', 'png', 'mp4'] as const).map(f => (
+              <button key={f} onClick={() => onFormatChange(f)} className={`py-2 rounded-lg text-sm font-medium transition-colors uppercase ${exportFormat === f ? 'bg-purple-500 text-white shadow-sm' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>{f}</button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mt-1.5">
+            {exportFormat === 'jpeg' ? 'Compressed · good for photos' : exportFormat === 'png' ? 'Lossless · supports transparency' : 'Animated video (WebM)'}
+          </p>
+        </div>
+
+        {/* Quality */}
+        {exportFormat === 'jpeg' && (
+          <div className="mb-5">
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-sm font-semibold text-gray-700">Quality</label>
+              <span className="text-sm text-gray-500">{exportQuality}%</span>
+            </div>
+            <input type="range" min="60" max="100" value={exportQuality} onChange={(e) => onQualityChange(parseInt(e.target.value))} className="w-full" />
+            <div className="flex justify-between text-xs text-gray-400 mt-0.5"><span>Smaller</span><span>Best</span></div>
+          </div>
+        )}
+
+        {/* Video Duration */}
+        {exportFormat === 'mp4' && (
+          <div className="mb-5">
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-sm font-semibold text-gray-700">Duration</label>
+              <span className="text-sm text-gray-500">{videoDuration}s</span>
+            </div>
+            <input type="range" min="1" max="10" value={videoDuration} onChange={(e) => onDurationChange(parseInt(e.target.value))} className="w-full" />
+          </div>
+        )}
+
+        {/* ── ACTIONS ── */}
+        <div className="flex gap-2 pt-2 border-t border-gray-100">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium text-sm text-gray-700">Cancel</button>
           <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded font-medium text-sm"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => {
-              onExport();
-              onClose();
-            }}
-            className="flex-1 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded font-medium text-sm flex items-center justify-center gap-2"
+            onClick={() => { onExport(); onClose(); }}
+            disabled={selectedFormats.length === 0}
+            className="flex-1 px-4 py-2.5 bg-purple-500 hover:bg-purple-600 disabled:opacity-40 text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2"
           >
             <Download className="w-4 h-4" />
-            Export Now
+            {selectedFormats.length === 1 ? 'Export' : `Export ZIP (${selectedFormats.length})`}
           </button>
         </div>
       </div>
@@ -1595,8 +1618,9 @@ const ExportDialog = ({
   );
 };
 
-export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
-  const [slides, setSlides] = useState<Slide[]>(() => createInitialSlides(format));
+export default function LayerBasedSocialMediaEditor({ initialFormat = 'story' }: EditorProps) {
+  const [format, setFormat] = useState<FormatKey>(initialFormat);
+  const [slides, setSlides] = useState<Slide[]>(() => createInitialSlides(initialFormat));
   const [currentSlide, setCurrentSlide] = useState(0);
 
   // Undo/redo history
@@ -1646,6 +1670,20 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
     setCanUndo(true);
     setCanRedo(h.pointer < h.stack.length - 1);
   }, []);
+  // Format change: keep slides but reposition logos
+  const handleFormatChange = (newFormat: FormatKey) => {
+    const newDims = getDimensions(newFormat);
+    setSlides(prev => prev.map(slide => ({
+      ...slide,
+      layers: slide.layers.map(layer =>
+        layer.type === 'logo'
+          ? { ...layer, position: { x: newDims.width / 2, y: newDims.height - 60 } }
+          : layer
+      ),
+    })));
+    setFormat(newFormat);
+  };
+
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [isDraggingLayer, setIsDraggingLayer] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -1668,8 +1706,8 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
   const [mediaLibrary, setMediaLibrary] = useState<MediaItem[]>([]);
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [showSafeArea, setShowSafeArea] = useState(false);
-  const [showSequenceView, setShowSequenceView] = useState(false);
   const [globalLayers, setGlobalLayers] = useState<TextLayer[]>([]);
+  const [selectedExportFormats, setSelectedExportFormats] = useState<FormatKey[]>(['story', 'post', 'post-portrait', 'post-landscape', 'linkedin']);
   const slideRef = useRef<HTMLDivElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
 
@@ -2610,21 +2648,48 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
             img.crossOrigin = 'anonymous';
             img.onload = () => {
               ctx.save();
+
               const imgWidth = (mediaLayer.scale / 100) * exportDims.width;
               const imgHeight = (mediaLayer.scale / 100) * exportDims.height;
-              let dx = (mediaLayer.position.x / 100) * exportDims.width - imgWidth / 2;
-              let dy = (mediaLayer.position.y / 100) * exportDims.height - imgHeight / 2;
+              const cx = (mediaLayer.position.x / 100) * exportDims.width;
+              const cy = (mediaLayer.position.y / 100) * exportDims.height;
 
-              // Border: fill full area with border color, then inset dx/dy/imgWidth/imgHeight
+              // Opacity
+              ctx.globalAlpha = (mediaLayer.opacity ?? 100) / 100;
+
+              // Shadow
+              if (mediaLayer.shadow) {
+                ctx.shadowColor = mediaLayer.shadowColor ?? '#000000';
+                ctx.shadowBlur = (mediaLayer.shadowBlur ?? 20) * scale;
+              }
+
+              // Translate to center, apply rotation & flip
+              ctx.translate(cx, cy);
+              const rot = ((mediaLayer.rotation ?? 0) * Math.PI) / 180;
+              if (rot !== 0) ctx.rotate(rot);
+              if (mediaLayer.flipH) ctx.scale(-1, 1);
+              if (mediaLayer.flipV) ctx.scale(1, -1);
+
               const bw = (mediaLayer.borderWidth ?? 0) * scale;
+              const drawW = imgWidth - bw * 2;
+              const drawH = imgHeight - bw * 2;
+
+              // Corner radius clipping
+              const cr = (mediaLayer.cornerRadius ?? 0) * scale;
+              if (cr > 0) {
+                ctx.beginPath();
+                ctx.roundRect(-imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight, cr);
+                ctx.clip();
+              }
+
+              // Border fill
               if (bw > 0) {
                 ctx.fillStyle = mediaLayer.borderColor ?? '#ffffff';
-                ctx.fillRect(dx, dy, imgWidth, imgHeight);
-                dx += bw;
-                dy += bw;
+                ctx.fillRect(-imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
               }
-              const drawW = bw > 0 ? imgWidth - bw * 2 : imgWidth;
-              const drawH = bw > 0 ? imgHeight - bw * 2 : imgHeight;
+
+              const dstX = -imgWidth / 2 + bw;
+              const dstY = -imgHeight / 2 + bw;
 
               // Apply filter
               const f = mediaLayer.filter ?? 'none';
@@ -2633,34 +2698,54 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
               else if (f === 'sepia') ctx.filter = 'sepia(100%)';
               else if (f === 'brightness') ctx.filter = 'brightness(1.4)';
 
-              // Crop: draw only relevant half of source image
+              // Draw image with crop / fit
               const crop = mediaLayer.crop ?? 'full';
+              const fit = mediaLayer.objectFit ?? 'cover';
+
               if (crop === 'left-half') {
-                ctx.drawImage(img, 0, 0, img.width / 2, img.height, dx, dy, drawW, drawH);
+                ctx.drawImage(img, 0, 0, img.width / 2, img.height, dstX, dstY, drawW, drawH);
               } else if (crop === 'right-half') {
-                ctx.drawImage(img, img.width / 2, 0, img.width / 2, img.height, dx, dy, drawW, drawH);
+                ctx.drawImage(img, img.width / 2, 0, img.width / 2, img.height, dstX, dstY, drawW, drawH);
+              } else if (crop === 'top-half') {
+                ctx.drawImage(img, 0, 0, img.width, img.height / 2, dstX, dstY, drawW, drawH);
+              } else if (crop === 'bottom-half') {
+                ctx.drawImage(img, 0, img.height / 2, img.width, img.height / 2, dstX, dstY, drawW, drawH);
+              } else if (fit === 'contain') {
+                const imgAspect = img.width / img.height;
+                const dstAspect = drawW / drawH;
+                let lw: number, lh: number, lx: number, ly: number;
+                if (imgAspect > dstAspect) {
+                  lw = drawW; lh = drawW / imgAspect;
+                  lx = dstX; ly = dstY + (drawH - lh) / 2;
+                } else {
+                  lh = drawH; lw = drawH * imgAspect;
+                  lx = dstX + (drawW - lw) / 2; ly = dstY;
+                }
+                ctx.drawImage(img, lx, ly, lw, lh);
               } else {
                 const pad = f === 'blur' ? 20 : 0;
-                ctx.drawImage(img, dx - pad, dy - pad, drawW + pad * 2, drawH + pad * 2);
+                ctx.drawImage(img, dstX - pad, dstY - pad, drawW + pad * 2, drawH + pad * 2);
               }
               ctx.filter = 'none';
+              ctx.shadowBlur = 0;
 
-              // Overlay (applied over the inset image area)
+              // Overlay
               const ov = mediaLayer.overlay ?? 'none';
               if (ov === 'dark') {
                 ctx.fillStyle = 'rgba(0,0,0,0.5)';
-                ctx.fillRect(dx, dy, drawW, drawH);
+                ctx.fillRect(dstX, dstY, drawW, drawH);
               } else if (ov === 'light') {
                 ctx.fillStyle = 'rgba(255,255,255,0.3)';
-                ctx.fillRect(dx, dy, drawW, drawH);
+                ctx.fillRect(dstX, dstY, drawW, drawH);
               } else if (ov === 'gradient') {
-                const grad = ctx.createLinearGradient(dx, dy, dx, dy + drawH);
+                const grad = ctx.createLinearGradient(dstX, dstY, dstX, dstY + drawH);
                 grad.addColorStop(0, 'transparent');
                 grad.addColorStop(0.3, 'transparent');
                 grad.addColorStop(1, 'rgba(0,0,0,0.7)');
                 ctx.fillStyle = grad;
-                ctx.fillRect(dx, dy, drawW, drawH);
+                ctx.fillRect(dstX, dstY, drawW, drawH);
               }
+
               ctx.restore();
               resolve();
             };
@@ -2763,15 +2848,14 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
     }
   };
 
-  // ZIP export: renders all slides in story, post, and landscape formats
+  // ZIP / multi-format export: renders all slides in selected formats
   const handleZipExport = async () => {
     const zip = new JSZip();
 
-    const zipFormats = [
-      { folder: 'story', format: 'story' },
-      { folder: 'post', format: 'post' },
-      { folder: 'landscape', format: 'post-landscape' },
-    ];
+    const zipFormats = selectedExportFormats.map(f => ({
+      folder: f.replace('post-', '').replace('-', '_'),
+      format: f,
+    }));
 
     for (const { folder, format: fmt } of zipFormats) {
       const exportDims = getExportDimensions(fmt);
@@ -2844,33 +2928,36 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
     localStorage.setItem('abrakadabra-presets', JSON.stringify(updatedPresets));
   };
 
-  // Export
+  // Export — routes to ZIP if multiple formats selected, else single format
   const handleExport = async () => {
     if (!slideRef.current) return;
 
-    // Handle MP4 video export
     if (exportFormat === 'mp4') {
       await handleVideoExport();
       return;
     }
 
-    try {
-      const exportDims = getExportDimensions(format);
+    // Multiple formats → ZIP
+    if (selectedExportFormats.length > 1) {
+      await handleZipExport();
+      return;
+    }
 
-      // Create a canvas for rendering
+    // Single format (or fall back to current canvas format)
+    try {
+      const exportFmt = selectedExportFormats[0] ?? format;
+      const exportDims = getExportDimensions(exportFmt);
+      const fmtDims = getDimensions(exportFmt);
       const renderCanvas = document.createElement('canvas');
       renderCanvas.width = exportDims.width;
       renderCanvas.height = exportDims.height;
-
-      await renderSlideToCanvas(currentSlideData, exportDims, renderCanvas);
-
-      // Convert canvas to blob and download
+      await renderSlideToCanvas(mergeGlobalLayers(currentSlideData), exportDims, renderCanvas, fmtDims);
       renderCanvas.toBlob((blob) => {
         if (blob) {
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
-          link.download = `abrakadabra-slide-${currentSlide + 1}.${exportFormat}`;
+          link.download = `abrakadabra-${exportFmt}-slide-${currentSlide + 1}.${exportFormat}`;
           link.click();
           URL.revokeObjectURL(url);
         }
@@ -2959,6 +3046,10 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
 
         const isBlur = layer.filter === 'blur';
         const hasCrop = layer.crop && layer.crop !== 'full';
+        const rotation = layer.rotation ?? 0;
+        const flipH = layer.flipH ? -1 : 1;
+        const flipV = layer.flipV ? -1 : 1;
+        const mediaTransform = `translate(-50%, -50%) rotate(${rotation}deg) scaleX(${flipH}) scaleY(${flipV})`;
         return (
           <div
             key={layer.id}
@@ -2966,13 +3057,16 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
             style={{
               left: `${layer.position.x}%`,
               top: `${layer.position.y}%`,
-              transform: 'translate(-50%, -50%)',
+              transform: mediaTransform,
               width: `${layer.scale}%`,
               height: `${layer.scale}%`,
               zIndex: layer.zIndex,
               overflow: 'hidden',
               border: (layer.borderWidth ?? 0) > 0 ? `${layer.borderWidth}px solid ${layer.borderColor ?? '#ffffff'}` : undefined,
               boxSizing: 'border-box',
+              borderRadius: (layer.cornerRadius ?? 0) > 0 ? `${layer.cornerRadius}px` : undefined,
+              boxShadow: layer.shadow ? `0 8px ${layer.shadowBlur ?? 20}px ${layer.shadowColor ?? '#000000'}` : undefined,
+              opacity: (layer.opacity ?? 100) / 100,
             }}
             onMouseDown={(e) => handleLayerMouseDown(e, layer)}
           >
@@ -2980,8 +3074,9 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
               <img
                 src={layer.url}
                 alt={layer.name}
-                className={`${hasCrop ? '' : 'w-full'} h-full object-cover`}
+                className={`${hasCrop ? '' : 'w-full'} h-full`}
                 style={{
+                  objectFit: layer.objectFit ?? 'cover',
                   filter: getCssFilter(layer.filter),
                   ...(isBlur ? { transform: 'scale(1.1)' } : {}),
                   ...getCropStyle(layer.crop),
@@ -2990,8 +3085,9 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
             ) : (
               <video
                 src={layer.url}
-                className={`${hasCrop ? '' : 'w-full'} h-full object-cover`}
+                className={`${hasCrop ? '' : 'w-full'} h-full`}
                 style={{
+                  objectFit: layer.objectFit ?? 'cover',
                   filter: getCssFilter(layer.filter),
                   ...(isBlur ? { transform: 'scale(1.1)' } : {}),
                   ...getCropStyle(layer.crop),
@@ -3134,9 +3230,11 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
           exportFormat={exportFormat}
           exportQuality={exportQuality}
           videoDuration={videoDuration}
+          selectedFormats={selectedExportFormats}
           onFormatChange={setExportFormat}
           onQualityChange={setExportQuality}
           onDurationChange={setVideoDuration}
+          onSelectedFormatsChange={setSelectedExportFormats}
           onExport={handleExport}
           onZipExport={handleZipExport}
           onClose={() => setShowExportDialog(false)}
@@ -3145,6 +3243,24 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
       <div className="flex gap-6 p-6 bg-gray-50 min-h-screen">
         {/* Left Sidebar - Layers */}
         <div className="w-64 flex-shrink-0 space-y-4">
+
+          {/* ── FORMAT SELECTOR ── */}
+          <div className="bg-white rounded-lg shadow-lg p-4">
+            <h3 className="font-bold mb-3 text-xs uppercase tracking-wide text-gray-500">Canvas Format</h3>
+            <div className="space-y-1">
+              {ALL_EXPORT_FORMATS.map(({ key, label, ratio }) => (
+                <button
+                  key={key}
+                  onClick={() => handleFormatChange(key)}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors ${format === key ? 'bg-purple-600 text-white shadow-sm' : 'bg-gray-50 hover:bg-gray-100 text-gray-700'}`}
+                >
+                  <span>{label}</span>
+                  <span className={`text-xs ${format === key ? 'text-purple-200' : 'text-gray-400'}`}>{ratio}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <LayerPanel
             layers={currentSlideData.layers}
             globalLayers={globalLayers}
@@ -3460,68 +3576,46 @@ export default function LayerBasedSocialMediaEditor({ format }: EditorProps) {
             )}
           </div>
 
-          {/* Slide Thumbnails / Sequence View */}
-          {/* Toggle between thumbnails and sequence view */}
-          <div className="flex items-center gap-2 mb-1">
-            <button
-              onClick={() => setShowSequenceView(false)}
-              className={`text-xs px-2 py-1 rounded ${!showSequenceView ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-            >
-              Thumbnails
-            </button>
-            <button
-              onClick={() => setShowSequenceView(true)}
-              className={`text-xs px-2 py-1 rounded ${showSequenceView ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-            >
-              Sequence
-            </button>
-          </div>
-          <div className={`flex ${showSequenceView ? 'gap-0' : 'gap-2'} overflow-x-auto pb-2`}>
+          {/* Slide Strip */}
+          <div className="flex gap-2 overflow-x-auto pb-2">
             {slides.map((slide, index) => {
-              const thumbScale = showSequenceView ? 0.12 : 0.15;
+              const thumbScale = 0.14;
               const bgLayer = slide.layers.find(l => l.type === 'background') as BackgroundLayer | undefined;
               const mediaLayer = slide.layers.find(l => l.type === 'media') as MediaLayer | undefined;
               return (
-                <button
-                  key={slide.id}
-                  onClick={() => setCurrentSlide(index)}
-                  className={`flex-shrink-0 ${showSequenceView ? 'border' : 'border-2 rounded'} overflow-hidden ${
-                    currentSlide === index ? 'border-blue-500' : 'border-gray-300'
-                  }`}
-                  style={{
-                    width: dimensions.width * thumbScale,
-                    height: dimensions.height * thumbScale,
-                  }}
-                >
-                  <div
-                    className="w-full h-full relative"
-                    style={{ backgroundColor: bgLayer?.color ?? '#fff' }}
+                <div key={slide.id} className="flex-shrink-0 relative group">
+                  <button
+                    onClick={() => setCurrentSlide(index)}
+                    className={`block border-2 rounded-lg overflow-hidden transition-all ${currentSlide === index ? 'border-blue-500 shadow-md' : 'border-gray-200 hover:border-gray-400'}`}
+                    style={{ width: dimensions.width * thumbScale, height: dimensions.height * thumbScale }}
                   >
-                    {mediaLayer?.url && (
-                      <img
-                        src={mediaLayer.url}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        style={{
-                          filter: mediaLayer.filter === 'blur' ? 'blur(2px)' : mediaLayer.filter === 'grayscale' ? 'grayscale(100%)' : 'none',
-                          opacity: 0.8,
-                        }}
-                      />
-                    )}
-                    <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-700" style={{ textShadow: '0 0 3px rgba(255,255,255,0.8)' }}>
-                      {index + 1}
+                    <div className="w-full h-full relative" style={{ backgroundColor: bgLayer?.color ?? '#fff' }}>
+                      {mediaLayer?.url && (
+                        <img src={mediaLayer.url} className="absolute inset-0 w-full h-full object-cover" style={{ filter: mediaLayer.filter === 'grayscale' ? 'grayscale(100%)' : 'none', opacity: 0.9 }} />
+                      )}
+                      <div className="absolute inset-0 flex items-end justify-center pb-0.5">
+                        <span className="text-[9px] font-bold text-gray-600 bg-white/70 px-1 rounded">{index + 1}</span>
+                      </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+                  {/* Delete button on hover */}
+                  {slides.length > 1 && (
+                    <button
+                      onClick={() => handleDeleteSlide(index)}
+                      className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white rounded-full text-xs items-center justify-center hidden group-hover:flex z-10 hover:bg-red-600"
+                    >×</button>
+                  )}
+                </div>
               );
             })}
             {/* Add new slide button */}
             <button
               onClick={handleAddSlide}
-              className="flex-shrink-0 border-2 border-dashed border-gray-300 rounded hover:border-green-500 hover:bg-green-50 flex items-center justify-center text-gray-400 hover:text-green-600 transition-colors"
-              style={{ width: dimensions.width * (showSequenceView ? 0.12 : 0.15), height: dimensions.height * (showSequenceView ? 0.12 : 0.15) }}
+              className="flex-shrink-0 border-2 border-dashed border-gray-200 rounded-lg hover:border-green-400 hover:bg-green-50 flex items-center justify-center text-gray-300 hover:text-green-500 transition-colors"
+              style={{ width: dimensions.width * 0.14, height: dimensions.height * 0.14 }}
               title="Add new slide"
             >
-              <Plus size={16} />
+              <Plus size={18} />
             </button>
           </div>
         </div>

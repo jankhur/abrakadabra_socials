@@ -74,6 +74,16 @@ export type MediaLayer = {
   crop?: 'full' | 'left-half' | 'right-half' | 'top-half' | 'bottom-half';
   borderWidth?: number;
   borderColor?: string;
+  // New transform & style properties
+  rotation?: number;         // degrees, -180 to 180
+  cornerRadius?: number;     // px
+  flipH?: boolean;
+  flipV?: boolean;
+  shadow?: boolean;
+  shadowColor?: string;
+  shadowBlur?: number;
+  opacity?: number;          // 0-100
+  objectFit?: 'cover' | 'contain';
 };
 
 export type Layer = BackgroundLayer | MediaLayer | TextLayer | LogoLayer;
